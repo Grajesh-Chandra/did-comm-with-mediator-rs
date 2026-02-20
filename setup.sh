@@ -135,15 +135,30 @@ setup_environment() {
 
         # Blank the mediator_did line in mediator.toml so the wizard doesn't
         # detect an existing DID and offer to reuse it (which skips secrets.json)
+        # We save/restore the original in case setup_environment doesn't overwrite it.
         local mediator_toml="${MESSAGING_DIR}/affinidi-messaging-mediator/conf/mediator.toml"
+        local mediator_toml_orig=""
         if [ -f "${mediator_toml}" ]; then
+            mediator_toml_orig=$(grep '^mediator_did = ' "${mediator_toml}" || true)
             sed -i.bak 's/^mediator_did = .*/mediator_did = ""/' "${mediator_toml}"
             rm -f "${mediator_toml}.bak"
-            info "Cleared mediator_did in mediator.toml for fresh setup"
+            info "Temporarily cleared mediator_did in mediator.toml for fresh setup"
         fi
 
         # setup_environment requires CWD inside crates/affinidi-messaging
         (cd "${MESSAGING_DIR}" && cargo run --bin setup_environment)
+
+        # Restore original mediator_did if the wizard didn't change it
+        if [ -n "${mediator_toml_orig}" ] && [ -f "${mediator_toml}" ]; then
+            local current_did
+            current_did=$(grep '^mediator_did = ' "${mediator_toml}" || true)
+            if [ "${current_did}" = 'mediator_did = ""' ]; then
+                # Wizard didn't update it — restore original
+                sed -i.bak "s|^mediator_did = .*|${mediator_toml_orig}|" "${mediator_toml}"
+                rm -f "${mediator_toml}.bak"
+                info "Restored original mediator_did in mediator.toml"
+            fi
+        fi
     fi
 
     # environments.json is generated inside crates/affinidi-messaging/
@@ -179,19 +194,6 @@ setup_environment() {
     fi
     ok "secrets.json verified"
 
-    # If setup_environment created a did:peer (not did:web), disable
-    # did_web_self_hosted in mediator.toml since mediator_did.json won't exist
-    local mediator_toml="${MESSAGING_DIR}/affinidi-messaging-mediator/conf/mediator.toml"
-    local mediator_did_json="${MESSAGING_DIR}/affinidi-messaging-mediator/conf/mediator_did.json"
-    if [ ! -f "${mediator_did_json}" ]; then
-        info "mediator_did.json not found (using did:peer) — disabling did_web_self_hosted"
-        if [ -f "${mediator_toml}" ]; then
-            sed -i.bak 's|^did_web_self_hosted = .*|# did_web_self_hosted disabled (using did:peer)|' "${mediator_toml}"
-            rm -f "${mediator_toml}.bak"
-            ok "did_web_self_hosted commented out in mediator.toml"
-        fi
-    fi
-
     # Copy SSL certs and config files (including secrets.json)
     local certs_dir="${TDK_DIR}/crates/affinidi-messaging/affinidi-messaging-mediator/conf"
     if [ -d "${certs_dir}" ]; then
@@ -222,6 +224,18 @@ start_mediator() {
 
     export REDIS_URL="redis://@localhost:6379"
     export RUST_LOG="info,affinidi_messaging_mediator=debug"
+
+    # Grant SELF_MANAGE_LIST so the demo app can call access_list_add for
+    # Alice ↔ Bob without needing admin privileges.
+    export GLOBAL_DEFAULT_ACL="DENY_ALL,LOCAL,SEND_MESSAGES,RECEIVE_MESSAGES,SELF_MANAGE_LIST"
+
+    # For did:peer setups mediator_did.json does not exist;
+    # clear DID_WEB_SELF_HOSTED so the mediator skips the file.
+    local mediator_did_json="${mediator_dir}/conf/mediator_did.json"
+    if [ ! -f "${mediator_did_json}" ]; then
+        info "did:peer mode — unsetting DID_WEB_SELF_HOSTED"
+        unset DID_WEB_SELF_HOSTED 2>/dev/null || true
+    fi
 
     (cd "${mediator_dir}" && cargo run 2>&1) > "${SCRIPT_DIR}/mediator.log" &
     local mediator_pid=$!

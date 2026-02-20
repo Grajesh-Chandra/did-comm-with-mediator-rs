@@ -89,7 +89,7 @@ pub async fn trust_ping(
     // ── Step 2: Receive Pong via live stream ────────────────────────────
     match atm
         .message_pickup()
-        .live_stream_get(sender_profile, &response.message_id, Duration::from_secs(10), true)
+        .live_stream_get(sender_profile, &response.message_id, Duration::from_secs(10), false)
         .await
     {
         Ok(Some((msg, _metadata))) => {
