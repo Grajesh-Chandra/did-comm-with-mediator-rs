@@ -68,6 +68,12 @@ pub struct PacketEvent {
     pub direction: PacketDirection,
     pub from: String,
     pub to: String,
+    /// Human-readable alias ("alice", "bob", "mediator") for the `from` DID.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub from_alias: Option<String>,
+    /// Human-readable alias for the `to` DID.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub to_alias: Option<String>,
     pub step: PacketStep,
     pub label: String,
     pub color: String,
@@ -93,12 +99,21 @@ impl PacketEvent {
             direction,
             from: from.into(),
             to: to.into(),
+            from_alias: None,
+            to_alias: None,
             step,
             label,
             color,
             raw_json,
             correlation_id,
         }
+    }
+
+    /// Set human-readable aliases for from/to.
+    pub fn with_aliases(mut self, from_alias: &str, to_alias: &str) -> Self {
+        self.from_alias = Some(from_alias.to_string());
+        self.to_alias = Some(to_alias.to_string());
+        self
     }
 }
 

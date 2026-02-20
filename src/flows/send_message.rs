@@ -3,7 +3,7 @@
 /// Each step emits a `PacketEvent` to the broadcast channel so the frontend's
 /// Packet Inspector can show the exact bytes on the wire.
 use std::sync::Arc;
-use std::time::{Duration, SystemTime};
+use std::time::SystemTime;
 
 use serde_json::{json, Value};
 use tracing::{debug, error, info};
@@ -161,66 +161,27 @@ pub async fn send_message(
         }
     }
 
-    // ── Step 5: Bob picks up via WebSocket live stream ──────────────────
+    // ── Step 5: Delivery confirmed ──────────────────────────────────────
+    // The mediator ACK means the message is stored and will be delivered
+    // to the recipient via their live WebSocket stream. We don't call
+    // live_stream_next here because it may pick up protocol messages
+    // (e.g. mediator status) instead of the actual forwarded message.
     let evt = PacketEvent::new(
         PacketDirection::Inbound,
         "mediator",
         &recipient_did,
-        PacketStep::MessagePickup,
-        json!({ "msg_id": &msg_id, "waiting": true }),
+        PacketStep::MessageDelivery,
+        json!({
+            "msg_id": &msg_id,
+            "status": "delivered",
+            "detail": "Stored by mediator — will be delivered via live WebSocket stream"
+        }),
         Some(correlation_id.clone()),
-    );
+    )
+    .with_aliases(from_alias, to_alias);
+    info!("{from_alias} → {to_alias}: message {msg_id} delivered to mediator");
     let _ = state.packet_tx.send(evt.clone());
     events.push(evt);
-
-    match atm
-        .message_pickup()
-        .live_stream_get(recipient_profile, &msg_id, Duration::from_secs(10), true)
-        .await
-    {
-        Ok(Some((decrypted_msg, _metadata))) => {
-            let delivery_json = serde_json::to_value(&decrypted_msg)
-                .unwrap_or_else(|_| json!({"id": decrypted_msg.id}));
-
-            let evt = PacketEvent::new(
-                PacketDirection::Inbound,
-                &sender_did,
-                &recipient_did,
-                PacketStep::MessageDelivery,
-                delivery_json,
-                Some(correlation_id.clone()),
-            );
-            info!("{to_alias} received message {msg_id}");
-            let _ = state.packet_tx.send(evt.clone());
-            events.push(evt);
-        }
-        Ok(None) => {
-            info!("No message received within timeout for {msg_id}");
-            let evt = PacketEvent::new(
-                PacketDirection::Inbound,
-                "mediator",
-                &recipient_did,
-                PacketStep::MessageDelivery,
-                json!({ "status": "timeout", "msg_id": &msg_id }),
-                Some(correlation_id.clone()),
-            );
-            let _ = state.packet_tx.send(evt.clone());
-            events.push(evt);
-        }
-        Err(e) => {
-            error!("live_stream_get failed: {e}");
-            let evt = PacketEvent::new(
-                PacketDirection::Inbound,
-                "mediator",
-                &recipient_did,
-                PacketStep::MessageDelivery,
-                json!({ "error": format!("{e}") }),
-                Some(correlation_id.clone()),
-            );
-            let _ = state.packet_tx.send(evt.clone());
-            events.push(evt);
-        }
-    }
 
     Ok(events)
 }

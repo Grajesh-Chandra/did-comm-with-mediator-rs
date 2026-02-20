@@ -87,52 +87,58 @@ pub async fn trust_ping(
     events.push(ack_evt);
 
     // ── Step 2: Receive Pong via live stream ────────────────────────────
-    match atm
-        .message_pickup()
-        .live_stream_get(sender_profile, &response.message_id, Duration::from_secs(10), true)
-        .await
-    {
-        Ok(Some((msg, _metadata))) => {
-            let pong_json =
-                serde_json::to_value(&msg).unwrap_or_else(|_| json!({"id": msg.id}));
-            let pong_evt = PacketEvent::new(
-                PacketDirection::Inbound,
-                &target_did,
-                &sender_did,
-                PacketStep::TrustPong,
-                pong_json,
-                Some(correlation_id.clone()),
-            );
-            info!("{from_alias} ← {to_alias} PONG received");
-            let _ = state.packet_tx.send(pong_evt.clone());
-            events.push(pong_evt);
+    // Retry up to 3 times to skip mediator protocol messages (e.g. status)
+    let mut pong_received = false;
+    for attempt in 0..3 {
+        match atm
+            .message_pickup()
+            .live_stream_next(sender_profile, Some(Duration::from_secs(10)), true)
+            .await
+        {
+            Ok(Some((msg, _metadata))) => {
+                // Skip non-ping-response messages (mediator status, etc.)
+                if msg.type_ != "https://didcomm.org/trust-ping/2.0/ping-response" {
+                    debug!("Skipping non-pong message (type: {}, attempt {attempt})", msg.type_);
+                    continue;
+                }
+                let pong_json =
+                    serde_json::to_value(&msg).unwrap_or_else(|_| json!({"id": msg.id}));
+                let pong_evt = PacketEvent::new(
+                    PacketDirection::Inbound,
+                    &target_did,
+                    &sender_did,
+                    PacketStep::TrustPong,
+                    pong_json,
+                    Some(correlation_id.clone()),
+                );
+                info!("{from_alias} ← {to_alias} PONG received");
+                let _ = state.packet_tx.send(pong_evt.clone());
+                events.push(pong_evt);
+                pong_received = true;
+                break;
+            }
+            Ok(None) => {
+                debug!("No pong received within timeout (attempt {attempt})");
+                break; // timeout means no more messages
+            }
+            Err(e) => {
+                error!("Pong pickup failed: {e}");
+                break;
+            }
         }
-        Ok(None) => {
-            debug!("No pong received within timeout");
-            let timeout_evt = PacketEvent::new(
-                PacketDirection::Inbound,
-                &target_did,
-                &sender_did,
-                PacketStep::TrustPong,
-                json!({ "status": "timeout" }),
-                Some(correlation_id.clone()),
-            );
-            let _ = state.packet_tx.send(timeout_evt.clone());
-            events.push(timeout_evt);
-        }
-        Err(e) => {
-            error!("Pong pickup failed: {e}");
-            let err_evt = PacketEvent::new(
-                PacketDirection::Inbound,
-                &target_did,
-                &sender_did,
-                PacketStep::TrustPong,
-                json!({ "error": format!("{e}") }),
-                Some(correlation_id.clone()),
-            );
-            let _ = state.packet_tx.send(err_evt.clone());
-            events.push(err_evt);
-        }
+    }
+
+    if !pong_received {
+        let timeout_evt = PacketEvent::new(
+            PacketDirection::Inbound,
+            &target_did,
+            &sender_did,
+            PacketStep::TrustPong,
+            json!({ "status": "timeout", "detail": "Pong not received (may have been consumed by protocol messages)" }),
+            Some(correlation_id.clone()),
+        );
+        let _ = state.packet_tx.send(timeout_evt.clone());
+        events.push(timeout_evt);
     }
 
     Ok(events)

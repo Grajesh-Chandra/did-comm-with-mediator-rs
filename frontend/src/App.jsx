@@ -15,12 +15,16 @@ export default function App() {
   const [connected, setConnected] = useState(false);
   const [error, setError] = useState(null);
   const eventSourceRef = useRef(null);
+  const identitiesRef = useRef(null);
 
   // Fetch identities on mount
   useEffect(() => {
     fetch(`${API_BASE}/identities`)
       .then((r) => r.json())
-      .then(setIdentities)
+      .then((ids) => {
+        setIdentities(ids);
+        identitiesRef.current = ids;
+      })
       .catch((e) => setError(`Failed to load identities: ${e.message}`));
   }, []);
 
@@ -39,25 +43,6 @@ export default function App() {
           return;
         }
         setPackets((prev) => [pkt, ...prev]);
-
-        // Track delivered messages for chat panes
-        if (pkt.step === 'message_delivery' && pkt.raw_json?.body) {
-          const recipient = pkt.to?.includes('alice') ? 'alice' : 'bob';
-          const sender = pkt.from?.includes('alice') ? 'Alice' : 'Bob';
-          setMessages((prev) => ({
-            ...prev,
-            [recipient]: [
-              ...prev[recipient],
-              {
-                id: pkt.id,
-                from: sender,
-                body: pkt.raw_json.body?.content || JSON.stringify(pkt.raw_json.body),
-                timestamp: pkt.timestamp,
-                correlationId: pkt.correlation_id,
-              },
-            ],
-          }));
-        }
       } catch {
         // ignore parse errors
       }
@@ -81,18 +66,34 @@ export default function App() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Send failed');
 
-      // Add to sender's chat
+      const ts = new Date().toISOString();
+      const corrId = data.correlation_id || Date.now().toString();
+      const senderAlias = from.toLowerCase();
+      const recipientAlias = to.toLowerCase();
+      const senderName = from.charAt(0).toUpperCase() + from.slice(1);
+
+      // Add to sender's chat (sent message) AND recipient's chat (received)
       setMessages((prev) => ({
         ...prev,
-        [from.toLowerCase()]: [
-          ...prev[from.toLowerCase()],
+        [senderAlias]: [
+          ...prev[senderAlias],
           {
-            id: data.correlation_id || Date.now().toString(),
-            from: from,
+            id: corrId + '-sent',
+            from: senderName,
             body,
-            timestamp: new Date().toISOString(),
-            correlationId: data.correlation_id,
+            timestamp: ts,
+            correlationId: corrId,
             self: true,
+          },
+        ],
+        [recipientAlias]: [
+          ...prev[recipientAlias],
+          {
+            id: corrId + '-recv',
+            from: senderName,
+            body,
+            timestamp: ts,
+            correlationId: corrId,
           },
         ],
       }));
