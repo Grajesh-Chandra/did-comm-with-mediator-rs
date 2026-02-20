@@ -179,6 +179,19 @@ setup_environment() {
     fi
     ok "secrets.json verified"
 
+    # If setup_environment created a did:peer (not did:web), disable
+    # did_web_self_hosted in mediator.toml since mediator_did.json won't exist
+    local mediator_toml="${MESSAGING_DIR}/affinidi-messaging-mediator/conf/mediator.toml"
+    local mediator_did_json="${MESSAGING_DIR}/affinidi-messaging-mediator/conf/mediator_did.json"
+    if [ ! -f "${mediator_did_json}" ]; then
+        info "mediator_did.json not found (using did:peer) — disabling did_web_self_hosted"
+        if [ -f "${mediator_toml}" ]; then
+            sed -i.bak 's|^did_web_self_hosted = .*|# did_web_self_hosted disabled (using did:peer)|' "${mediator_toml}"
+            rm -f "${mediator_toml}.bak"
+            ok "did_web_self_hosted commented out in mediator.toml"
+        fi
+    fi
+
     # Copy SSL certs and config files (including secrets.json)
     local certs_dir="${TDK_DIR}/crates/affinidi-messaging/affinidi-messaging-mediator/conf"
     if [ -d "${certs_dir}" ]; then
