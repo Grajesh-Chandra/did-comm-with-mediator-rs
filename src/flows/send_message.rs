@@ -175,7 +175,7 @@ pub async fn send_message(
 
     match atm
         .message_pickup()
-        .live_stream_get(recipient_profile, &msg_id, Duration::from_secs(10), false)
+        .live_stream_get(recipient_profile, &msg_id, Duration::from_secs(10), true)
         .await
     {
         Ok(Some((decrypted_msg, _metadata))) => {

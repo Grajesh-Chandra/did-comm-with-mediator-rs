@@ -7,4 +7,7 @@ environments.json
 conf/
 affinidi-tdk-rs/
 mediator.log
+backend.log
+frontend.log
 .mediator.pid
+.backend.pid

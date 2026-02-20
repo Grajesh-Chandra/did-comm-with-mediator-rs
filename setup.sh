@@ -229,12 +229,19 @@ start_mediator() {
     # Alice ↔ Bob without needing admin privileges.
     export GLOBAL_DEFAULT_ACL="DENY_ALL,LOCAL,SEND_MESSAGES,RECEIVE_MESSAGES,SELF_MANAGE_LIST"
 
-    # For did:peer setups mediator_did.json does not exist;
-    # clear DID_WEB_SELF_HOSTED so the mediator skips the file.
+    # For did:peer setups, mediator_did.json does not exist.
+    # The TOML default for did_web_self_hosted points to that file, which
+    # crashes the mediator. Comment out the line so it becomes None.
+    # (The setup_environment wizard already rewrites mediator.toml, so
+    # this is consistent with the wizard's own config modifications.)
+    local mediator_toml="${mediator_dir}/conf/mediator.toml"
     local mediator_did_json="${mediator_dir}/conf/mediator_did.json"
-    if [ ! -f "${mediator_did_json}" ]; then
-        info "did:peer mode — unsetting DID_WEB_SELF_HOSTED"
-        unset DID_WEB_SELF_HOSTED 2>/dev/null || true
+    if [ ! -f "${mediator_did_json}" ] && [ -f "${mediator_toml}" ]; then
+        if grep -q '^did_web_self_hosted' "${mediator_toml}"; then
+            sed -i.bak 's|^did_web_self_hosted = .*|# did_web_self_hosted disabled for did:peer (no mediator_did.json)|' "${mediator_toml}"
+            rm -f "${mediator_toml}.bak"
+            info "did:peer mode — disabled did_web_self_hosted in mediator.toml"
+        fi
     fi
 
     (cd "${mediator_dir}" && cargo run 2>&1) > "${SCRIPT_DIR}/mediator.log" &
