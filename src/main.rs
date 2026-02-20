@@ -34,7 +34,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 
     // ── Initialise TDK + ATM + profiles ─────────────────────────────────
     let environment_name =
-        env::var("TDK_ENVIRONMENT").unwrap_or_else(|_| "default".to_string());
+        env::var("TDK_ENVIRONMENT").unwrap_or_else(|_| "local".to_string());
 
     let state = mediator::initialise(&environment_name, packet_tx).await?;
 
