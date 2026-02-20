@@ -1,0 +1,10 @@
+/target
+/frontend/node_modules
+/frontend/dist
+*.env
+!.env.example
+environments.json
+conf/
+affinidi-tdk-rs/
+mediator.log
+.mediator.pid

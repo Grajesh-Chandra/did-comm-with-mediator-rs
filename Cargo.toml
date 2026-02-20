@@ -1,0 +1,33 @@
+[package]
+name = "didcomm-demo"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85.0"
+description = "DIDComm v2.1 P2P Demo — Affinidi Messaging SDK"
+
+[dependencies]
+# Affinidi crates
+affinidi-tdk = "0.4"
+affinidi-messaging-sdk = "0.14"
+affinidi-messaging-didcomm = "0.11"
+
+# Web framework
+axum = { version = "0.8", features = ["ws"] }
+tokio = { version = "1", features = ["full"] }
+tower-http = { version = "0.6", features = ["cors", "fs"] }
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# Utilities
+uuid = { version = "1", features = ["v4", "fast-rng"] }
+chrono = { version = "0.4", features = ["serde"] }
+
+# Logging
+tracing = { version = "0.1", features = ["valuable"] }
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt", "json"] }
+
+# Async helpers
+tokio-stream = { version = "0.1", features = ["sync"] }
+futures = "0.3"

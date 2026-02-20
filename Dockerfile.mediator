@@ -1,0 +1,25 @@
+# ─── Mediator Dockerfile (build from affinidi-tdk-rs source) ─────────────
+# This is a convenience Dockerfile. For most setups, run the mediator
+# natively: cd affinidi-messaging-mediator && cargo run
+
+FROM rust:1.85-bookworm AS builder
+
+WORKDIR /build
+
+# Clone the Affinidi TDK repository
+RUN apt-get update && apt-get install -y git cmake && \
+    git clone --depth 1 https://github.com/affinidi/affinidi-tdk-rs.git .
+
+# Build just the mediator binary
+RUN cargo build --release -p affinidi-messaging-mediator
+
+# ── Runtime ──────────────────────────────────────────────────────────────
+FROM debian:bookworm-slim
+
+RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+COPY --from=builder /build/target/release/affinidi-messaging-mediator /app/mediator
+
+EXPOSE 7037
+CMD ["/app/mediator"]

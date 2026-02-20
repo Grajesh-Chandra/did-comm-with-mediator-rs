@@ -1,0 +1,53 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  ::-webkit-scrollbar {
+    width: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: #1a1a2e;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #4a4a6a;
+    border-radius: 3px;
+  }
+}
+
+/* Packet card animations */
+.packet-enter {
+  animation: slideIn 0.3s ease-out;
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Flow diagram arrow animation */
+.arrow-animate {
+  animation: arrowPulse 1s ease-in-out;
+}
+
+@keyframes arrowPulse {
+  0% { opacity: 0; stroke-dashoffset: 100; }
+  50% { opacity: 1; }
+  100% { opacity: 1; stroke-dashoffset: 0; }
+}
+
+/* Connection status pulse */
+.status-pulse {
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}

@@ -1,0 +1,43 @@
+# ─── Docker Compose for the DIDComm P2P Demo ───────────────────────────
+# Starts Redis (required by the mediator) and the Affinidi Mediator.
+# The demo Axum server runs natively via `cargo run`.
+
+services:
+  # ── Redis ──────────────────────────────────────────────────────────────
+  redis:
+    image: redis:8.0
+    container_name: redis-local
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # ── Affinidi Messaging Mediator ────────────────────────────────────────
+  # NOTE: The mediator is built from source (affinidi-tdk-rs repo).
+  # If you have a pre-built image, replace the build section with:
+  #   image: affinidi/messaging-mediator:latest
+  #
+  # For local development, you typically run the mediator using:
+  #   cd affinidi-messaging-mediator && cargo run
+  #
+  # This service is provided as a convenience for fully containerised demos.
+  mediator:
+    build:
+      context: .
+      dockerfile: Dockerfile.mediator
+    container_name: affinidi-mediator
+    ports:
+      - "7037:7037"
+    environment:
+      - REDIS_URL=redis://redis:6379
+      - RUST_LOG=info,affinidi_messaging_mediator=debug
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    volumes:
+      - ./conf:/app/conf
